@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
+import ActivityChat from "@/components/ActivityChat";
 import { supabase } from "@/lib/supabase";
 
 type Activity = {
@@ -325,6 +326,14 @@ export default function ActivityDetailPage() {
                 </Link>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Chat — visible to host and approved attendees */}
+        {user && (isHost || myRsvp?.status === "approved") && (
+          <div className="border-t pt-4">
+            <p className="text-sm font-medium text-zinc-500 mb-2">Chat</p>
+            <ActivityChat activityId={activity.id} userId={user.id} />
           </div>
         )}
 
