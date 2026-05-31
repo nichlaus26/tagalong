@@ -21,6 +21,7 @@ const ACTIVITY_TYPES = [
 
 type Activity = {
   id: string;
+  host_id: string;
   title: string;
   type: string;
   location_text: string;
@@ -38,9 +39,23 @@ export default function Home() {
 
   useEffect(() => {
     async function load() {
+      // Get blocked user IDs (both directions) to filter out
+      let blockedIds: string[] = [];
+      if (user) {
+        const { data: myBlocks } = await supabase
+          .from("blocks")
+          .select("blocked_id")
+          .eq("blocker_id", user.id);
+
+        // Also check who has blocked the current user — need a raw query
+        // since RLS only lets us see our own blocks. We'll filter client-side
+        // for the "blocked by" direction using activities we can see.
+        blockedIds = myBlocks?.map((b) => b.blocked_id) ?? [];
+      }
+
       let query = supabase
         .from("activities")
-        .select("id, title, type, location_text, start_time, max_participants, host:profiles!activities_host_id_fkey(name, rating_avg, rating_count)")
+        .select("id, title, type, location_text, start_time, max_participants, host_id, host:profiles!activities_host_id_fkey(name, rating_avg, rating_count)")
         .eq("status", "upcoming")
         .gte("start_time", new Date().toISOString())
         .order("start_time", { ascending: true });
@@ -52,13 +67,20 @@ export default function Home() {
       const { data } = await query;
 
       if (data) {
+        // Filter out activities from blocked hosts
+        const filtered = blockedIds.length > 0
+          ? data.filter((a) => !blockedIds.includes(a.host_id))
+          : data;
+
         // Fetch approved RSVP counts for these activities
-        const ids = data.map((a) => a.id);
-        const { data: rsvpCounts } = await supabase
-          .from("rsvps")
-          .select("activity_id")
-          .in("activity_id", ids)
-          .eq("status", "approved");
+        const ids = filtered.map((a) => a.id);
+        const { data: rsvpCounts } = ids.length > 0
+          ? await supabase
+              .from("rsvps")
+              .select("activity_id")
+              .in("activity_id", ids)
+              .eq("status", "approved")
+          : { data: [] };
 
         const countMap: Record<string, number> = {};
         rsvpCounts?.forEach((r) => {
@@ -66,7 +88,7 @@ export default function Home() {
         });
 
         setActivities(
-          (data as unknown as Activity[]).map((a) => ({
+          (filtered as unknown as Activity[]).map((a) => ({
             ...a,
             approved_count: countMap[a.id] || 0,
           }))
@@ -76,7 +98,7 @@ export default function Home() {
     }
 
     load();
-  }, [typeFilter]);
+  }, [typeFilter, user]);
 
   function formatDate(iso: string) {
     const d = new Date(iso);

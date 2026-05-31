@@ -43,6 +43,13 @@ export default function ActivityDetailPage() {
   const [rsvps, setRsvps] = useState<Rsvp[]>([]);
   const [rsvpLoading, setRsvpLoading] = useState(false);
 
+  // Report state
+  const [showReport, setShowReport] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reportSaving, setReportSaving] = useState(false);
+  const [reportSent, setReportSent] = useState(false);
+
   // Review state
   const [myReviews, setMyReviews] = useState<Set<string>>(new Set());
   const [reviewTarget, setReviewTarget] = useState<{ id: string; name: string; role: string } | null>(null);
@@ -607,6 +614,77 @@ export default function ActivityDetailPage() {
               >
                 Delete Activity
               </button>
+            )}
+          </div>
+        )}
+
+        {/* Report activity */}
+        {user && !isHost && (
+          <div className="border-t pt-4">
+            {reportSent ? (
+              <p className="text-sm text-green-700 text-center">Report submitted. Thank you.</p>
+            ) : !showReport ? (
+              <button
+                onClick={() => setShowReport(true)}
+                className="w-full text-sm text-zinc-400 hover:text-zinc-600"
+              >
+                Report this activity
+              </button>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!reportReason) return;
+                  setReportSaving(true);
+                  await supabase.from("reports").insert({
+                    reporter_id: user.id,
+                    activity_id: activity.id,
+                    reason: reportReason,
+                    details: reportDetails.trim() || null,
+                  });
+                  setReportSaving(false);
+                  setReportSent(true);
+                  setShowReport(false);
+                }}
+                className="flex flex-col gap-2"
+              >
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black"
+                >
+                  <option value="">Select reason</option>
+                  <option value="Inappropriate content">Inappropriate content</option>
+                  <option value="Scam or fraud">Scam or fraud</option>
+                  <option value="Safety concern">Safety concern</option>
+                  <option value="Spam">Spam</option>
+                  <option value="Other">Other</option>
+                </select>
+                <textarea
+                  value={reportDetails}
+                  onChange={(e) => setReportDetails(e.target.value)}
+                  placeholder="Additional details (optional)"
+                  rows={2}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black resize-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={reportSaving || !reportReason}
+                    className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {reportSaving ? "Sending..." : "Submit Report"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowReport(false)}
+                    className="flex-1 rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-medium hover:bg-zinc-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
             )}
           </div>
         )}

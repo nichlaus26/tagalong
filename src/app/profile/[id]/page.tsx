@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/lib/supabase";
 
 type Profile = {
@@ -25,11 +26,34 @@ type Review = {
   activity: { id: string; title: string };
 };
 
+const REPORT_REASONS = [
+  "Inappropriate behavior",
+  "Harassment",
+  "Spam",
+  "Fake profile",
+  "Other",
+];
+
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [notFound, setNotFound] = useState(false);
+
+  // Block state
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
+
+  // Report state
+  const [showReport, setShowReport] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reportSaving, setReportSaving] = useState(false);
+  const [reportSent, setReportSent] = useState(false);
+
+  const isOwnProfile = user?.id === id;
 
   useEffect(() => {
     supabase
@@ -55,6 +79,20 @@ export default function ProfilePage() {
       });
   }, [id]);
 
+  // Check block status
+  useEffect(() => {
+    if (!user || isOwnProfile) return;
+    supabase
+      .from("blocks")
+      .select("id")
+      .eq("blocker_id", user.id)
+      .eq("blocked_id", id)
+      .maybeSingle()
+      .then(({ data }) => {
+        setIsBlocked(!!data);
+      });
+  }, [user, id, isOwnProfile]);
+
   if (notFound) {
     return (
       <div className="flex items-center justify-center min-h-screen px-4">
@@ -64,6 +102,41 @@ export default function ProfilePage() {
   }
 
   if (!profile) return null;
+
+  async function handleBlock() {
+    if (!user) return;
+    setBlockLoading(true);
+    if (isBlocked) {
+      await supabase
+        .from("blocks")
+        .delete()
+        .eq("blocker_id", user.id)
+        .eq("blocked_id", id);
+      setIsBlocked(false);
+    } else {
+      await supabase.from("blocks").insert({
+        blocker_id: user.id,
+        blocked_id: id,
+      });
+      setIsBlocked(true);
+    }
+    setBlockLoading(false);
+  }
+
+  async function handleReport(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user || !reportReason) return;
+    setReportSaving(true);
+    await supabase.from("reports").insert({
+      reporter_id: user.id,
+      reported_user_id: id,
+      reason: reportReason,
+      details: reportDetails.trim() || null,
+    });
+    setReportSaving(false);
+    setReportSent(true);
+    setShowReport(false);
+  }
 
   return (
     <div className="min-h-screen px-4 py-8 max-w-md mx-auto">
@@ -76,6 +149,15 @@ export default function ProfilePage() {
           <h1 className="text-xl font-semibold">{profile.name}</h1>
           <p className="text-sm text-zinc-500">{profile.city}</p>
         </div>
+
+        {isOwnProfile && (
+          <Link
+            href="/me"
+            className="text-sm text-zinc-500 hover:text-zinc-800"
+          >
+            Go to My Profile &rarr;
+          </Link>
+        )}
 
         {profile.rating_count > 0 && (
           <p className="text-sm text-zinc-600">
@@ -96,6 +178,67 @@ export default function ProfilePage() {
                 {interest}
               </span>
             ))}
+          </div>
+        )}
+
+        {/* Report & Block — only for other users */}
+        {user && !isOwnProfile && (
+          <div className="border-t pt-4 flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                onClick={handleBlock}
+                disabled={blockLoading}
+                className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+                  isBlocked
+                    ? "border-red-300 text-red-600 hover:bg-red-50"
+                    : "border-zinc-300 hover:bg-zinc-50"
+                }`}
+              >
+                {isBlocked ? "Unblock" : "Block"}
+              </button>
+              {!reportSent ? (
+                <button
+                  onClick={() => setShowReport(!showReport)}
+                  className="flex-1 rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-medium hover:bg-zinc-50"
+                >
+                  {showReport ? "Cancel" : "Report"}
+                </button>
+              ) : (
+                <span className="flex-1 rounded-lg border border-green-300 bg-green-50 px-4 py-2.5 text-sm text-green-700 text-center">
+                  Reported
+                </span>
+              )}
+            </div>
+
+            {showReport && (
+              <form onSubmit={handleReport} className="flex flex-col gap-2 mt-1">
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black"
+                >
+                  <option value="">Select reason</option>
+                  {REPORT_REASONS.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+                <textarea
+                  value={reportDetails}
+                  onChange={(e) => setReportDetails(e.target.value)}
+                  placeholder="Additional details (optional)"
+                  rows={2}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black resize-none"
+                />
+                <button
+                  type="submit"
+                  disabled={reportSaving || !reportReason}
+                  className="rounded-lg bg-red-600 px-4 py-2.5 text-sm text-white font-medium hover:bg-red-700 disabled:opacity-50"
+                >
+                  {reportSaving ? "Sending..." : "Submit Report"}
+                </button>
+              </form>
+            )}
           </div>
         )}
 
