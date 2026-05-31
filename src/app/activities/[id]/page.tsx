@@ -43,6 +43,13 @@ export default function ActivityDetailPage() {
   const [rsvps, setRsvps] = useState<Rsvp[]>([]);
   const [rsvpLoading, setRsvpLoading] = useState(false);
 
+  // Review state
+  const [myReviews, setMyReviews] = useState<Set<string>>(new Set());
+  const [reviewTarget, setReviewTarget] = useState<{ id: string; name: string; role: string } | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSaving, setReviewSaving] = useState(false);
+
   const loadRsvps = useCallback(async () => {
     if (!user) return;
 
@@ -65,6 +72,16 @@ export default function ActivityDetailPage() {
     if (all) setRsvps(all as unknown as Rsvp[]);
   }, [id, user]);
 
+  const loadMyReviews = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("reviews")
+      .select("reviewee_id")
+      .eq("activity_id", id)
+      .eq("reviewer_id", user.id);
+    if (data) setMyReviews(new Set(data.map((r) => r.reviewee_id)));
+  }, [id, user]);
+
   useEffect(() => {
     supabase
       .from("activities")
@@ -81,8 +98,11 @@ export default function ActivityDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (activity && user) loadRsvps();
-  }, [activity, user, loadRsvps]);
+    if (activity && user) {
+      loadRsvps();
+      loadMyReviews();
+    }
+  }, [activity, user, loadRsvps, loadMyReviews]);
 
   if (notFound) {
     return (
@@ -198,6 +218,54 @@ export default function ActivityDetailPage() {
     });
 
     await loadRsvps();
+  }
+
+  // Determine if user can leave reviews (is host or approved attendee of a completed activity)
+  const canReview = user && isCompleted && (isHost || myRsvp?.status === "approved");
+
+  // Build list of reviewable people (host + approved attendees, minus self, minus already reviewed)
+  const reviewablePeople: { id: string; name: string; role: string }[] = [];
+  if (canReview && activity) {
+    // Host can be reviewed by attendees
+    if (!isHost && !myReviews.has(activity.host_id)) {
+      reviewablePeople.push({ id: activity.host_id, name: activity.host.name, role: "host" });
+    }
+    // Attendees can be reviewed
+    for (const r of approvedRsvps) {
+      if (r.user_id !== user.id && !myReviews.has(r.user_id)) {
+        reviewablePeople.push({ id: r.user_id, name: r.user.name, role: "attendee" });
+      }
+    }
+    // Host can review attendees — attendees listed above with role "attendee"
+    // If current user IS the host, the host entry above is skipped (correct)
+  }
+
+  async function handleSubmitReview() {
+    if (!reviewTarget || !user || !activity) return;
+    setReviewSaving(true);
+
+    const { error } = await supabase.from("reviews").insert({
+      activity_id: activity.id,
+      reviewer_id: user.id,
+      reviewee_id: reviewTarget.id,
+      role: reviewTarget.role,
+      rating: reviewRating,
+      comment: reviewComment.trim() || null,
+    });
+
+    if (!error) {
+      await supabase.from("notifications").insert({
+        user_id: reviewTarget.id,
+        type: "new_review",
+        activity_id: activity.id,
+        body: `You received a ${reviewRating}-star review for "${activity.title}".`,
+      });
+      setMyReviews((prev) => new Set([...prev, reviewTarget.id]));
+      setReviewTarget(null);
+      setReviewRating(5);
+      setReviewComment("");
+    }
+    setReviewSaving(false);
   }
 
   return (
@@ -334,6 +402,81 @@ export default function ActivityDetailPage() {
           <div className="border-t pt-4">
             <p className="text-sm font-medium text-zinc-500 mb-2">Chat</p>
             <ActivityChat activityId={activity.id} userId={user.id} />
+          </div>
+        )}
+
+        {/* Reviews — after completion */}
+        {canReview && reviewablePeople.length > 0 && !reviewTarget && (
+          <div className="border-t pt-4">
+            <p className="text-sm font-medium text-zinc-500 mb-2">Leave Reviews</p>
+            <div className="flex flex-col gap-2">
+              {reviewablePeople.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    setReviewTarget(p);
+                    setReviewRating(5);
+                    setReviewComment("");
+                  }}
+                  className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 hover:border-zinc-400 transition-colors"
+                >
+                  <span className="text-sm">{p.name}</span>
+                  <span className="text-xs text-zinc-400 capitalize">{p.role}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {reviewTarget && (
+          <div className="border-t pt-4">
+            <p className="text-sm font-medium text-zinc-500 mb-2">
+              Review {reviewTarget.name}
+            </p>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="block text-sm mb-1">Rating</label>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReviewRating(star)}
+                      className={`text-2xl ${
+                        star <= reviewRating ? "text-yellow-400" : "text-zinc-300"
+                      }`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Comment (optional)</label>
+                <textarea
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  rows={2}
+                  placeholder="How was your experience?"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black resize-none"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSubmitReview}
+                  disabled={reviewSaving}
+                  className="flex-1 rounded-lg bg-black px-4 py-3 text-white font-medium hover:bg-zinc-800 disabled:opacity-50"
+                >
+                  {reviewSaving ? "Submitting..." : "Submit Review"}
+                </button>
+                <button
+                  onClick={() => setReviewTarget(null)}
+                  className="flex-1 rounded-lg border border-zinc-300 px-4 py-3 font-medium hover:bg-zinc-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
