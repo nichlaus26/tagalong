@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
+import Spinner from "@/components/Spinner";
 import { supabase } from "@/lib/supabase";
 
 type Profile = {
@@ -101,7 +102,7 @@ export default function ProfilePage() {
     );
   }
 
-  if (!profile) return null;
+  if (!profile) return <Spinner />;
 
   async function handleBlock() {
     if (!user) return;

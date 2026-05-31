@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import Spinner from "@/components/Spinner";
 import { supabase } from "@/lib/supabase";
 
 const INTEREST_OPTIONS = [
@@ -27,7 +28,7 @@ export default function OnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  if (authLoading) return null;
+  if (authLoading) return <Spinner />;
   if (!user) {
     router.push("/auth");
     return null;

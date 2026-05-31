@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
+import Spinner from "@/components/Spinner";
 import { supabase } from "@/lib/supabase";
 
 type Profile = {
@@ -100,7 +101,7 @@ export default function MePage() {
       });
   }, [user, authLoading, router]);
 
-  if (authLoading || !profile) return null;
+  if (authLoading || !profile) return <Spinner />;
 
   function toggleInterest(interest: string) {
     setInterests((prev) =>

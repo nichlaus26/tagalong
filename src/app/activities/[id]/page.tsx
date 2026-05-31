@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import ActivityChat from "@/components/ActivityChat";
+import Spinner from "@/components/Spinner";
 import { supabase } from "@/lib/supabase";
 
 type Activity = {
@@ -119,7 +120,7 @@ export default function ActivityDetailPage() {
     );
   }
 
-  if (!activity) return null;
+  if (!activity) return <Spinner />;
 
   const isHost = user?.id === activity.host_id;
   const isPast = new Date(activity.start_time) < new Date();

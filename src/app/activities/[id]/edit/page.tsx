@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import Spinner from "@/components/Spinner";
 import { supabase } from "@/lib/supabase";
 
 const ACTIVITY_TYPES = [
@@ -67,7 +68,7 @@ export default function EditActivityPage() {
       });
   }, [id, user, authLoading, router]);
 
-  if (!loaded) return null;
+  if (!loaded) return <Spinner />;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

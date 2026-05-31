@@ -10,21 +10,29 @@ export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setInfo("");
     setLoading(true);
 
     if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error, data } = await supabase.auth.signUp({ email, password });
       if (error) {
         setError(error.message);
         setLoading(false);
         return;
       }
-      // After signup, check if profile needs onboarding
+      // If email confirmation is required, the session will be null
+      if (!data.session) {
+        setInfo("Check your email and click the confirmation link, then sign in.");
+        setLoading(false);
+        setIsSignUp(false);
+        return;
+      }
       router.push("/onboarding");
     } else {
       const { error } = await supabase.auth.signInWithPassword({
@@ -81,6 +89,7 @@ export default function AuthPage() {
         />
 
         {error && <p className="text-red-600 text-sm">{error}</p>}
+        {info && <p className="text-green-600 text-sm">{info}</p>}
 
         <button
           type="submit"
