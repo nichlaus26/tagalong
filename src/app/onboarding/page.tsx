@@ -92,7 +92,7 @@ export default function OnboardingPage() {
           <label className="block text-sm font-medium mb-1">City</label>
           <input
             type="text"
-            value="Austin"
+            value="Brussels, Belgium"
             disabled
             className="w-full rounded-lg border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-500"
           />

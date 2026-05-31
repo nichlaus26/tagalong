@@ -11,7 +11,7 @@
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   name text not null default '',
-  city text not null default 'Austin',
+  city text not null default 'Brussels, Belgium',
   bio text,
   interests text[] not null default '{}',
   photo_url text,
