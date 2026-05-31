@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/lib/supabase";
 
@@ -13,6 +14,20 @@ type Profile = {
   interests: string[];
   rating_avg: number;
   rating_count: number;
+};
+
+type ActivitySummary = {
+  id: string;
+  title: string;
+  type: string;
+  start_time: string;
+  status: string;
+};
+
+type RsvpWithActivity = {
+  id: string;
+  status: string;
+  activity: ActivitySummary;
 };
 
 const INTEREST_OPTIONS = [
@@ -39,6 +54,10 @@ export default function MePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const [tab, setTab] = useState<"hosting" | "going">("hosting");
+  const [hosting, setHosting] = useState<ActivitySummary[]>([]);
+  const [rsvps, setRsvps] = useState<RsvpWithActivity[]>([]);
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -58,6 +77,26 @@ export default function MePage() {
           setBio(data.bio ?? "");
           setInterests(data.interests);
         }
+      });
+
+    // Load hosting
+    supabase
+      .from("activities")
+      .select("id, title, type, start_time, status")
+      .eq("host_id", user.id)
+      .order("start_time", { ascending: false })
+      .then(({ data }) => {
+        if (data) setHosting(data);
+      });
+
+    // Load RSVPs with activity info
+    supabase
+      .from("rsvps")
+      .select("id, status, activity:activities(id, title, type, start_time, status)")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setRsvps(data as unknown as RsvpWithActivity[]);
       });
   }, [user, authLoading, router]);
 
@@ -106,10 +145,27 @@ export default function MePage() {
     router.push("/");
   }
 
+  function formatDate(iso: string) {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  }
+
+  function statusLabel(status: string) {
+    if (status === "pending") return "Pending";
+    if (status === "approved") return "Approved";
+    if (status === "declined") return "Declined";
+    return status;
+  }
+
   return (
     <div className="min-h-screen px-4 py-8 max-w-md mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">My Profile</h1>
+        <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-800">
+          &larr; Home
+        </Link>
         <button
           onClick={handleSignOut}
           className="text-sm text-zinc-500 hover:text-zinc-800"
@@ -119,7 +175,8 @@ export default function MePage() {
       </div>
 
       {editing ? (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 mb-8">
+          <h1 className="text-2xl font-bold">Edit Profile</h1>
           <div>
             <label className="block text-sm font-medium mb-1">Name *</label>
             <input
@@ -185,9 +242,9 @@ export default function MePage() {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 mb-8">
           <div>
-            <h2 className="text-xl font-semibold">{profile.name}</h2>
+            <h1 className="text-xl font-semibold">{profile.name}</h1>
             <p className="text-sm text-zinc-500">{profile.city}</p>
           </div>
 
@@ -198,9 +255,7 @@ export default function MePage() {
             </p>
           )}
 
-          {profile.bio && (
-            <p className="text-zinc-700">{profile.bio}</p>
-          )}
+          {profile.bio && <p className="text-zinc-700">{profile.bio}</p>}
 
           {profile.interests.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -223,6 +278,103 @@ export default function MePage() {
           </button>
         </div>
       )}
+
+      {/* Hosting / Going tabs */}
+      <div className="border-t pt-4">
+        <div className="flex gap-4 mb-4">
+          <button
+            onClick={() => setTab("hosting")}
+            className={`text-sm font-medium pb-1 ${
+              tab === "hosting"
+                ? "text-black border-b-2 border-black"
+                : "text-zinc-400 hover:text-zinc-600"
+            }`}
+          >
+            Hosting ({hosting.length})
+          </button>
+          <button
+            onClick={() => setTab("going")}
+            className={`text-sm font-medium pb-1 ${
+              tab === "going"
+                ? "text-black border-b-2 border-black"
+                : "text-zinc-400 hover:text-zinc-600"
+            }`}
+          >
+            Going / Requested ({rsvps.length})
+          </button>
+        </div>
+
+        {tab === "hosting" && (
+          <div className="flex flex-col gap-2">
+            {hosting.length === 0 ? (
+              <p className="text-sm text-zinc-500">No activities hosted yet.</p>
+            ) : (
+              hosting.map((a) => (
+                <Link
+                  key={a.id}
+                  href={`/activities/${a.id}`}
+                  className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 hover:border-zinc-400 transition-colors"
+                >
+                  <div>
+                    <p className="font-medium text-sm">{a.title}</p>
+                    <p className="text-xs text-zinc-500">
+                      {formatDate(a.start_time)} &middot; {a.type}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-xs rounded-full px-2 py-0.5 ${
+                      a.status === "cancelled"
+                        ? "bg-red-100 text-red-700"
+                        : a.status === "completed"
+                          ? "bg-zinc-100 text-zinc-500"
+                          : "bg-green-100 text-green-700"
+                    }`}
+                  >
+                    {a.status}
+                  </span>
+                </Link>
+              ))
+            )}
+          </div>
+        )}
+
+        {tab === "going" && (
+          <div className="flex flex-col gap-2">
+            {rsvps.length === 0 ? (
+              <p className="text-sm text-zinc-500">
+                No activities joined yet.
+              </p>
+            ) : (
+              rsvps.map((r) => (
+                <Link
+                  key={r.id}
+                  href={`/activities/${r.activity.id}`}
+                  className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 hover:border-zinc-400 transition-colors"
+                >
+                  <div>
+                    <p className="font-medium text-sm">{r.activity.title}</p>
+                    <p className="text-xs text-zinc-500">
+                      {formatDate(r.activity.start_time)} &middot;{" "}
+                      {r.activity.type}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-xs rounded-full px-2 py-0.5 ${
+                      r.status === "approved"
+                        ? "bg-green-100 text-green-700"
+                        : r.status === "pending"
+                          ? "bg-yellow-100 text-yellow-700"
+                          : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {statusLabel(r.status)}
+                  </span>
+                </Link>
+              ))
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
