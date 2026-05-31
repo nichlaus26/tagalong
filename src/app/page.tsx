@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
+import NotificationBell from "@/components/NotificationBell";
 import { supabase } from "@/lib/supabase";
 
 const ACTIVITY_TYPES = [
@@ -129,6 +130,7 @@ export default function Home() {
               >
                 + New
               </Link>
+              <NotificationBell />
               <Link
                 href="/me"
                 className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50"
