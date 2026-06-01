@@ -68,10 +68,10 @@ export default function Home() {
       const { data } = await query;
 
       if (data) {
-        // Filter out activities from blocked hosts
-        const filtered = blockedIds.length > 0
-          ? data.filter((a) => !blockedIds.includes(a.host_id))
-          : data;
+        // Filter out activities from blocked hosts and those with missing host profiles
+        const filtered = data.filter(
+          (a) => a.host && (!blockedIds.length || !blockedIds.includes(a.host_id))
+        );
 
         // Fetch approved RSVP counts for these activities
         const ids = filtered.map((a) => a.id);
@@ -206,8 +206,8 @@ export default function Home() {
 
               <div className="mt-3 flex items-center justify-between text-sm">
                 <span className="text-zinc-600">
-                  {activity.host.name}
-                  {activity.host.rating_count > 0 && (
+                  {activity.host?.name ?? "Unknown"}
+                  {activity.host?.rating_count > 0 && (
                     <span className="text-zinc-400 ml-1">
                       {activity.host.rating_avg.toFixed(1)}
                     </span>
