@@ -152,19 +152,6 @@ export default function ActivityDetailPage() {
   async function handleStatusChange(status: "completed" | "cancelled") {
     setActionLoading(true);
 
-    // If cancelling, create notifications for approved attendees
-    if (status === "cancelled") {
-      const notifs = approvedRsvps.map((r) => ({
-        user_id: r.user_id,
-        type: "activity_cancelled",
-        activity_id: activity!.id,
-        body: `"${activity!.title}" has been cancelled.`,
-      }));
-      if (notifs.length > 0) {
-        await supabase.from("notifications").insert(notifs);
-      }
-    }
-
     const { error } = await supabase
       .from("activities")
       .update({ status })
@@ -188,13 +175,6 @@ export default function ActivityDetailPage() {
       status: "pending",
     });
     if (!error) {
-      // Notify host of new request
-      await supabase.from("notifications").insert({
-        user_id: activity!.host_id,
-        type: "new_request",
-        activity_id: activity!.id,
-        body: `Someone requested to join "${activity!.title}".`,
-      });
       await loadRsvps();
     }
     setRsvpLoading(false);
@@ -214,17 +194,6 @@ export default function ActivityDetailPage() {
     if (status === "approved" && isFull) return;
 
     await supabase.from("rsvps").update({ status }).eq("id", rsvpId);
-
-    // Notify the user
-    await supabase.from("notifications").insert({
-      user_id: userId,
-      type: status === "approved" ? "rsvp_approved" : "rsvp_declined",
-      activity_id: activity!.id,
-      body: status === "approved"
-        ? `You've been approved for "${activity!.title}"!`
-        : `Your request for "${activity!.title}" was declined.`,
-    });
-
     await loadRsvps();
   }
 
@@ -262,12 +231,6 @@ export default function ActivityDetailPage() {
     });
 
     if (!error) {
-      await supabase.from("notifications").insert({
-        user_id: reviewTarget.id,
-        type: "new_review",
-        activity_id: activity.id,
-        body: `You received a ${reviewRating}-star review for "${activity.title}".`,
-      });
       setMyReviews((prev) => new Set([...prev, reviewTarget.id]));
       setReviewTarget(null);
       setReviewRating(5);
