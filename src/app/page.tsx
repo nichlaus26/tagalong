@@ -117,12 +117,38 @@ export default function Home() {
     );
   }
 
+  if (!authLoading && !user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen px-4">
+        <h1 className="text-3xl font-bold text-center">TagAlong</h1>
+        <p className="mt-3 text-lg text-zinc-600 text-center max-w-md">
+          Discover and join casual, in-person activities near you.
+        </p>
+        <div className="mt-8 flex flex-col gap-3 w-full max-w-xs">
+          <Link
+            href="/auth"
+            className="block w-full rounded-lg bg-black px-4 py-3 text-center text-white font-medium hover:bg-zinc-800"
+          >
+            Sign In
+          </Link>
+          <Link
+            href="/auth"
+            onClick={() => sessionStorage.setItem("authMode", "signup")}
+            className="block w-full rounded-lg border border-zinc-300 px-4 py-3 text-center font-medium hover:bg-zinc-50"
+          >
+            Create Account
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen px-4 py-8 max-w-md mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">TagAlong</h1>
         <div className="flex gap-3">
-          {authLoading ? null : user ? (
+          {authLoading ? null : (
             <>
               <Link
                 href="/activities/new"
@@ -138,13 +164,6 @@ export default function Home() {
                 Profile
               </Link>
             </>
-          ) : (
-            <Link
-              href="/auth"
-              className="rounded-lg bg-black px-4 py-2 text-sm text-white font-medium hover:bg-zinc-800"
-            >
-              Sign In
-            </Link>
           )}
         </div>
       </div>
