@@ -33,10 +33,10 @@ export default function AuthPage() {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/reset`,
       });
-      if (error?.message) {
-        setError(error.message);
+      if (error) {
+        setError(typeof error === "object" && "message" in error ? error.message : "Failed to send reset email. Please try again.");
       } else {
-        setInfo("Check your email for a password reset link.");
+        setInfo("If an account exists with that email, you'll receive a reset link shortly.");
       }
       setLoading(false);
       return;
