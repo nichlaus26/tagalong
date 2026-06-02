@@ -336,3 +336,53 @@ that lock logic into the Next.js frontend.
 - New Expo (React Native) project, separate repo or workspace.
 - Reuses: Supabase project, schema, RLS, auth, storage, generated types.
 - Rebuilds: the UI layer only (screens in React Native components).
+
+---
+
+## §12 — Security Invariants (DB-enforced)
+
+**Principle (restates and hardens §8):** Every access rule and every business
+rule must be enforced in the database — via RLS policies, CHECK constraints,
+unique constraints, or Postgres functions/triggers. The frontend may *also*
+check these for UX (hiding buttons, showing friendly errors), but a frontend
+check is never the enforcement point. Any client — the Next.js web app, the
+future native app, or a raw API call — must hit the same wall.
+
+**Why this is load-bearing here:** the native app (see §11) talks directly to
+Supabase. Any rule that lives only in Next.js does not exist for native. These
+invariants are the contract both clients share.
+
+### Invariants that MUST hold in the database
+
+1. **Notifications are server-generated only.** Clients cannot INSERT
+   notifications. Rows are created by Postgres triggers/functions on the events
+   that cause them (rsvp approved/declined, new request, new message, new
+   review, activity cancelled). RLS: a user may SELECT and UPDATE (mark-read)
+   only their own notifications; no client INSERT. Notification `body`/`type`
+   are composed server-side, never from client input.
+
+2. **Activity capacity is enforced in the database.** Approving an RSVP when the
+   activity is already at `max_participants` must fail at the DB level (trigger
+   or function on the rsvp approval path), not just in the UI.
+
+3. **Activity status transitions are guarded in the database.** Only legal
+   transitions are allowed (e.g. upcoming → completed, upcoming → cancelled).
+   Illegal transitions (e.g. cancelled → upcoming) are rejected by a trigger.
+
+4. **Reports cannot be duplicated.** A unique constraint prevents a user filing
+   multiple identical reports for the same target (reporter + reported_user
+   and/or activity).
+
+5. **Blocking ripples are enforced, not just filtered.** Per §4: a blocked user
+   cannot RSVP to the blocker's activities (RLS on rsvp INSERT). Feed/query
+   visibility filtering may be a query/view concern, but the security-critical
+   directions (RSVP permission, message access) live in RLS.
+
+### Standing rule for all future work
+
+- When adding any feature, ask: "If someone called the Supabase API directly,
+  bypassing my UI, could they break this rule?" If yes, the rule belongs in the
+  database, not the frontend.
+- Before merging a phase, audit for logic that lives only in route handlers /
+  server components / client code and move anything security- or
+  integrity-related into RLS or Postgres functions.
