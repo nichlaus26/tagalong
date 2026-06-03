@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import Spinner from "@/components/Spinner";
 import { supabase } from "@/lib/supabase";
-import { ALL_ALL_ACTIVITY_TYPES } from "@/lib/activityTypes";
+import { ALL_ACTIVITY_TYPES } from "@/lib/activityTypes";
 
 export default function NewActivityPage() {
   const { user, loading: authLoading } = useAuth();
