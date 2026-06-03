@@ -6,20 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import Spinner from "@/components/Spinner";
 import { supabase } from "@/lib/supabase";
-
-const ACTIVITY_TYPES = [
-  "Running",
-  "Hiking",
-  "Coffee",
-  "Climbing",
-  "Cycling",
-  "Yoga",
-  "Swimming",
-  "Walking",
-  "Photography",
-  "Board Games",
-  "Other",
-];
+import { ALL_ALL_ACTIVITY_TYPES } from "@/lib/activityTypes";
 
 export default function NewActivityPage() {
   const { user, loading: authLoading } = useAuth();
@@ -98,7 +85,7 @@ export default function NewActivityPage() {
             className="w-full rounded-lg border border-zinc-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white"
           >
             <option value="">Select a type</option>
-            {ACTIVITY_TYPES.map((t) => (
+            {ALL_ACTIVITY_TYPES.map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>

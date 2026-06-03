@@ -5,20 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import NotificationBell from "@/components/NotificationBell";
 import { supabase } from "@/lib/supabase";
-
-const ACTIVITY_TYPES = [
-  "Running",
-  "Hiking",
-  "Coffee",
-  "Climbing",
-  "Cycling",
-  "Yoga",
-  "Swimming",
-  "Walking",
-  "Photography",
-  "Board Games",
-  "Other",
-];
+import { FEED_ACTIVITY_TYPES } from "@/lib/activityTypes";
 
 type Activity = {
   id: string;
@@ -181,7 +168,7 @@ export default function Home() {
           >
             All
           </button>
-          {ACTIVITY_TYPES.map((t) => (
+          {FEED_ACTIVITY_TYPES.map((t) => (
             <button
               key={t}
               onClick={() => setTypeFilter(t)}
