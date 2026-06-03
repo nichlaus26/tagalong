@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import Spinner from "@/components/Spinner";
 import { supabase } from "@/lib/supabase";
@@ -70,7 +71,10 @@ export default function NewActivityPage() {
 
   return (
     <div className="min-h-screen px-4 py-8 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Create Activity</h1>
+      <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-800">
+        &larr; Back
+      </Link>
+      <h1 className="text-2xl font-bold mb-6 mt-4">Create Activity</h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div>

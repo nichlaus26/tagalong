@@ -1,8 +1,14 @@
 # TagAlong — Build Specification (v1)
 
-> A mobile-first web app for discovering and joining casual, in-person activities
-> (running, hiking, coffee meetups, climbing, etc.). Connects people with shared
-> interests for low-pressure social outings. **Launching in a single city first.**
+> A mobile-first web app built on a single idea: **"I'm already going to do this thing,
+> and I wouldn't mind if people joined."** You post where and when you'll be heading out,
+> others can see it and tag along — no commitment, no organizing, no big group.
+>
+> **Launch wedge: running, in Brussels, only.** The software is general (any activity,
+> any city — `type` and `city` are just fields), but v1 launches, seeds, and is messaged
+> as a running app for one city. Breadth is earned later (see §LAUNCH and §EXPANSION),
+> not shipped on day one. The broad vision ("anything people are doing, anywhere") is the
+> destination; running-in-Brussels is the entry point that earns the right to get there.
 
 **This document is the source of truth for building the MVP. Build it phase by phase, in order. Do not skip ahead.**
 
@@ -26,6 +32,92 @@ You do **not** need to read the code to get this working. Follow the setup steps
 
 ---
 
+## L. Launch strategy (the wedge — read before building anything)
+
+**The product framing is "tag along," not "meet up."** Every word of copy, every screen,
+every default should reflect: *the activity is happening whether or not anyone joins.*
+The user was going for a run anyway; posting is just sending up a flare. This is the whole
+reason the app survives the cold-start period — a post with zero joins is not a failure,
+it's just a run. Do not let the language drift toward "organize an event" or "host a group."
+
+**Launch target: runners in Brussels.** One activity, one city. Reasons (do not relitigate
+without strong evidence):
+- Running is genuinely solo-but-open — you lose nothing if no one joins, any pace can
+  accommodate a tag-along, no equipment / booking / venue, and it's high-frequency
+  (people run several times a week → more posts → more chances for a real join).
+- Density within one activity in one city is the only thing that creates the "magic
+  moment" (a stranger actually shows up). Breadth dilutes the only thing that matters early.
+- The founder is the first user (a runner who moved to Brussels and wanted exactly this),
+  which is one of the strongest possible founding positions.
+
+**Discipline note:** the code is already general — adding an activity `type` or a new
+`city` is trivial. That is *exactly why* the narrowness must be a deliberate product
+decision enforced by judgment, not by the software. Keep the app capable of anything;
+keep the launch ruthlessly about running in Brussels.
+
+**The riskiest assumption is behavioral, not technical.** It is *"will a stranger actually
+show up to my run?"* — not "can we build RSVP flows." That assumption is testable in a week
+with a WhatsApp group / a single Instagram post and zero code. Confirm the behavior exists
+before over-investing in the scaling machinery (chat, reviews, blocking). The app scales a
+behavior; make sure the behavior is real first.
+
+---
+
+## E. Expansion strategy (the destination — reviewed and agreed)
+
+The broad vision is "anything people are doing, anywhere." That vision is the *destination*,
+reached by sequencing — not by launching broad. Companies that own broad categories almost
+all started suffocatingly narrow (one college, books, black cars in one city). Narrowness is
+the strategy that makes breadth possible, not a compromise of it.
+
+**Governing principle:** each expansion step is **unlocked by density, not by time, boredom,
+or a stalled growth chart.** The bar is qualitative and deliberately not a hard metric:
+*expand only once the network produces the magic moment on its own* — i.e. a typical run,
+posted at a normal time, tends to get a join from someone the poster didn't personally
+recruit. Until that's reliably true, expanding only spreads thin seeding effort across more
+empty segments and dilutes the density that makes the thing work.
+
+> ⚠️ The strongest pull will be to add breadth to *feel* like progress when growth stalls.
+> That is the exact move that kills apps in this category. Resist it. Stalled growth is a
+> signal to deepen the current segment, not to widen.
+
+**Sequence (each step gated on the prior hitting the density bar):**
+
+1. **Running, Brussels** (now) — founder is user zero; seed by hand.
+2. **Second segment — direction chosen by observed organic pull, not chosen in advance.**
+   Watch where real demand appears and follow it. The two possible directions, with their
+   trade-offs, so the decision is informed when the time comes:
+   - *New activity, same city* (e.g. cycling in Brussels) — founder is physically present to
+     seed it; proves the model **generalizes beyond running**, which de-risks the broad vision.
+     Caveat: cycling has a pace/route-compatibility wrinkle (a much slower tag-along can spoil
+     the ride), so it's less purely "no pressure" than running.
+   - *Same activity, new city* (e.g. running in Ghent/Amsterdam) — proves the model **travels**;
+     lower product risk (running already works) but higher operational cost (cold-starting a
+     city the founder doesn't live in).
+   Pick whichever the users pull toward, not whichever looks better on paper.
+3. **Broaden activities within the proven city** — other solo-friendly-but-open activities
+   (swimming, walks, bouldering-as-tag-along). Each new `type` should still pass the
+   "solo-but-open, low-commitment, frequent" test that made running ideal.
+4. **Multi-city, multi-activity** — only once the single-city playbook is repeatable. This is
+   the broad "anything, anywhere" vision finally arriving — earned, not assumed.
+
+**⚠️ Climbing splits into two modes — don't treat it as one thing.**
+- *Bouldering* **is a valid tag-along activity type.** It's solo-but-open like running — you're
+  going anyway, company optional, no belayer required. The only difference from running is an
+  **access gate**: it happens at a specific gym, and a tag-along needs gym access (most/all gyms
+  sell day passes). So bouldering fits the standard feed, just with a venue and an access
+  consideration the poster should be able to note (e.g. "day passes available at the door").
+- *Lead climbing & top-rope* cross into **partner-matching**, not tag-along: you *need* a belayer
+  — "I need someone," not "I wouldn't mind someone." If/when these are supported, treat them as a
+  **separate partner-matching mode** (commitment expected, 1:1 pairing), not another row in the
+  drop-in feed. Don't rebuild that mechanic by accident by lumping it in with bouldering.
+
+> Practical seam: venue-gated activities (bouldering, and later swimming/gym sessions) may want
+> an optional "access note" field on a post so the tag-along knows what's required to join. Not a
+> v1 build item — just a known future need so it isn't a surprise.
+
+---
+
 ## 1. Tech stack (decided — do not substitute)
 
 - **Framework:** Next.js (App Router) + TypeScript
@@ -42,7 +134,7 @@ Keep dependencies minimal. No state-management library, no UI kit beyond Tailwin
 ## 2. v1 scope (build exactly this)
 
 **In scope:**
-- Single-city launch (city defaulted, not a freeform global field)
+- Single-city launch — **Brussels**, seeded and messaged as a **running** app (city defaulted, not a freeform global field; activity types exist in the schema but launch is running-focused — see §L)
 - Auth + profiles + onboarding
 - Activity creation / discovery / detail / edit / delete
 - Host-approved RSVPs (pending → approved/declined)
@@ -275,114 +367,3 @@ In your browser at supabase.com (Claude Code can't click for you — have it wal
 - On errors: paste the exact error; ask it to explain the cause before fixing.
 - Ask it to commit to git after each working phase.
 - If a phase feels too big, ask it to break the phase into smaller steps and do the first.
-
----
-
-## §11 — Mobile / Native App Strategy
-
-**Intent:** Native iOS + Android apps are a primary target, not a maybe. The
-web app ships first, but every decision below should preserve a clean path to a
-React Native (Expo) client that reuses this same backend. Do NOT take shortcuts
-that lock logic into the Next.js frontend.
-
-### Architecture principle: backend is client-agnostic
-
-- Supabase (Postgres + Auth + Storage + RLS) is the single shared backend for
-  BOTH the web app and the future native app. Neither client is privileged.
-- All security and business rules live in the database via RLS policies and
-  Postgres functions — NOT in Next.js route handlers or server components.
-  A rule enforced only in web code does not exist for the native client.
-- Any server-side logic that must exist (e.g. complex RSVP transitions, the
-  blocking "ripple") should live in Postgres functions / RPCs callable from any
-  client, or in Supabase Edge Functions — never in Next.js-only API routes.
-
-### Auth
-
-- Use Supabase Auth (already planned). It has official React Native / Expo
-  support, so the same auth system serves both clients.
-- Avoid Next.js-specific auth helpers (e.g. cookie-only session patterns) as the
-  source of truth. Sessions should work via the Supabase JS client, which both
-  web and native use.
-
-### Data contract
-
-- Keep all data access going through the Supabase client / generated types.
-  Generate and commit TypeScript types from the schema (`supabase gen types`)
-  so the native app can import the same type definitions later.
-- No web-only data shaping in server components that the native app couldn't
-  reproduce. If the web UI needs derived data, derive it in a Postgres
-  view/function so native gets it too.
-
-### Deferred-but-seamed for native
-
-- **Push notifications:** the existing in-app notifications table (bell icon)
-  stays the source of truth. Leave a seam to add native push (Expo push tokens)
-  later: a `push_tokens` table keyed to profile_id is enough to scaffold now
-  (table + RLS only; no send logic yet).
-- **Storage:** profile/activity photos via Supabase Storage already work
-  identically from native — no change needed.
-- **Realtime chat:** current plan is polling. Supabase Realtime works from
-  native too, so the eventual upgrade benefits both clients equally.
-
-### What NOT to build yet
-
-- Do not start the React Native app in this phase. Do not add Expo to this repo.
-- Do not abstract prematurely into a shared monorepo. The goal here is only to
-  keep the backend and data contract clean so a separate Expo app can be added
-  later with minimal friction.
-
-### When native work begins (future phase, not now)
-
-- New Expo (React Native) project, separate repo or workspace.
-- Reuses: Supabase project, schema, RLS, auth, storage, generated types.
-- Rebuilds: the UI layer only (screens in React Native components).
-
----
-
-## §12 — Security Invariants (DB-enforced)
-
-**Principle (restates and hardens §8):** Every access rule and every business
-rule must be enforced in the database — via RLS policies, CHECK constraints,
-unique constraints, or Postgres functions/triggers. The frontend may *also*
-check these for UX (hiding buttons, showing friendly errors), but a frontend
-check is never the enforcement point. Any client — the Next.js web app, the
-future native app, or a raw API call — must hit the same wall.
-
-**Why this is load-bearing here:** the native app (see §11) talks directly to
-Supabase. Any rule that lives only in Next.js does not exist for native. These
-invariants are the contract both clients share.
-
-### Invariants that MUST hold in the database
-
-1. **Notifications are server-generated only.** Clients cannot INSERT
-   notifications. Rows are created by Postgres triggers/functions on the events
-   that cause them (rsvp approved/declined, new request, new message, new
-   review, activity cancelled). RLS: a user may SELECT and UPDATE (mark-read)
-   only their own notifications; no client INSERT. Notification `body`/`type`
-   are composed server-side, never from client input.
-
-2. **Activity capacity is enforced in the database.** Approving an RSVP when the
-   activity is already at `max_participants` must fail at the DB level (trigger
-   or function on the rsvp approval path), not just in the UI.
-
-3. **Activity status transitions are guarded in the database.** Only legal
-   transitions are allowed (e.g. upcoming → completed, upcoming → cancelled).
-   Illegal transitions (e.g. cancelled → upcoming) are rejected by a trigger.
-
-4. **Reports cannot be duplicated.** A unique constraint prevents a user filing
-   multiple identical reports for the same target (reporter + reported_user
-   and/or activity).
-
-5. **Blocking ripples are enforced, not just filtered.** Per §4: a blocked user
-   cannot RSVP to the blocker's activities (RLS on rsvp INSERT). Feed/query
-   visibility filtering may be a query/view concern, but the security-critical
-   directions (RSVP permission, message access) live in RLS.
-
-### Standing rule for all future work
-
-- When adding any feature, ask: "If someone called the Supabase API directly,
-  bypassing my UI, could they break this rule?" If yes, the rule belongs in the
-  database, not the frontend.
-- Before merging a phase, audit for logic that lives only in route handlers /
-  server components / client code and move anything security- or
-  integrity-related into RLS or Postgres functions.
