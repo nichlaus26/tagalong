@@ -52,6 +52,7 @@ export function useDiscoverActivities() {
   const [activities, setActivities] = useState<DiscoveredActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [locationResolved, setLocationResolved] = useState(false);
+  const [firstLoadDone, setFirstLoadDone] = useState(false);
   const locationCached = useRef(false);
 
   // Resolve user location — always try geolocation, use cache as initial value
@@ -118,6 +119,7 @@ export function useDiscoverActivities() {
       setActivities(data as DiscoveredActivity[]);
     }
     setLoading(false);
+    if (!firstLoadDone) setFirstLoadDone(true);
   }, [filters, locationResolved]);
 
   useEffect(() => {
@@ -154,6 +156,7 @@ export function useDiscoverActivities() {
     activities,
     loading,
     locationResolved,
+    firstLoadDone,
     filters,
     setRadius,
     setRunSubtype,
