@@ -367,3 +367,114 @@ In your browser at supabase.com (Claude Code can't click for you — have it wal
 - On errors: paste the exact error; ask it to explain the cause before fixing.
 - Ask it to commit to git after each working phase.
 - If a phase feels too big, ask it to break the phase into smaller steps and do the first.
+
+---
+
+## §11 — Mobile / Native App Strategy
+
+**Intent:** Native iOS + Android apps are a primary target, not a maybe. The
+web app ships first, but every decision below should preserve a clean path to a
+React Native (Expo) client that reuses this same backend. Do NOT take shortcuts
+that lock logic into the Next.js frontend.
+
+### Architecture principle: backend is client-agnostic
+
+- Supabase (Postgres + Auth + Storage + RLS) is the single shared backend for
+  BOTH the web app and the future native app. Neither client is privileged.
+- All security and business rules live in the database via RLS policies and
+  Postgres functions — NOT in Next.js route handlers or server components.
+  A rule enforced only in web code does not exist for the native client.
+- Any server-side logic that must exist (e.g. complex RSVP transitions, the
+  blocking "ripple") should live in Postgres functions / RPCs callable from any
+  client, or in Supabase Edge Functions — never in Next.js-only API routes.
+
+### Auth
+
+- Use Supabase Auth (already planned). It has official React Native / Expo
+  support, so the same auth system serves both clients.
+- Avoid Next.js-specific auth helpers (e.g. cookie-only session patterns) as the
+  source of truth. Sessions should work via the Supabase JS client, which both
+  web and native use.
+
+### Data contract
+
+- Keep all data access going through the Supabase client / generated types.
+  Generate and commit TypeScript types from the schema (`supabase gen types`)
+  so the native app can import the same type definitions later.
+- No web-only data shaping in server components that the native app couldn't
+  reproduce. If the web UI needs derived data, derive it in a Postgres
+  view/function so native gets it too.
+
+### Deferred-but-seamed for native
+
+- **Push notifications:** the existing in-app notifications table (bell icon)
+  stays the source of truth. Leave a seam to add native push (Expo push tokens)
+  later: a `push_tokens` table keyed to profile_id is enough to scaffold now
+  (table + RLS only; no send logic yet).
+- **Storage:** profile/activity photos via Supabase Storage already work
+  identically from native — no change needed.
+- **Realtime chat:** current plan is polling. Supabase Realtime works from
+  native too, so the eventual upgrade benefits both clients equally.
+
+### What NOT to build yet
+
+- Do not start the React Native app in this phase. Do not add Expo to this repo.
+- Do not abstract prematurely into a shared monorepo. The goal here is only to
+  keep the backend and data contract clean so a separate Expo app can be added
+  later with minimal friction.
+
+### When native work begins (future phase, not now)
+
+- New Expo (React Native) project, separate repo or workspace.
+- Reuses: Supabase project, schema, RLS, auth, storage, generated types.
+- Rebuilds: the UI layer only (screens in React Native components).
+
+---
+
+## §12 — Security Invariants (DB-enforced)
+
+**Principle (restates and hardens §8):** Every access rule and every business
+rule must be enforced in the database — via RLS policies, CHECK constraints,
+unique constraints, or Postgres functions/triggers. The frontend may *also*
+check these for UX (hiding buttons, showing friendly errors), but a frontend
+check is never the enforcement point. Any client — the Next.js web app, the
+future native app, or a raw API call — must hit the same wall.
+
+**Why this is load-bearing here:** the native app (see §11) talks directly to
+Supabase. Any rule that lives only in Next.js does not exist for native. These
+invariants are the contract both clients share.
+
+### Invariants that MUST hold in the database
+
+1. **Notifications are server-generated only.** Clients cannot INSERT
+   notifications. Rows are created by Postgres triggers/functions on the events
+   that cause them (rsvp approved/declined, new request, new message, new
+   review, activity cancelled). RLS: a user may SELECT and UPDATE (mark-read)
+   only their own notifications; no client INSERT. Notification `body`/`type`
+   are composed server-side, never from client input.
+
+2. **Activity capacity is enforced in the database.** Approving an RSVP when the
+   activity is already at `max_participants` must fail at the DB level (trigger
+   or function on the rsvp approval path), not just in the UI.
+
+3. **Activity status transitions are guarded in the database.** Only legal
+   transitions are allowed (e.g. upcoming → completed, upcoming → cancelled).
+   Illegal transitions (e.g. cancelled → upcoming) are rejected by a trigger.
+
+4. **Reports cannot be duplicated.** A unique constraint prevents a user filing
+   multiple identical reports for the same target (reporter + reported_user
+   and/or activity).
+
+5. **Blocking ripples are enforced, not just filtered.** Per §4: a blocked user
+   cannot RSVP to the blocker's activities (RLS on rsvp INSERT). Feed/query
+   visibility filtering may be a query/view concern, but the security-critical
+   directions (RSVP permission, message access) live in RLS.
+
+### Standing rule for all future work
+
+- When adding any feature, ask: "If someone called the Supabase API directly,
+  bypassing my UI, could they break this rule?" If yes, the rule belongs in the
+  database, not the frontend.
+- Before merging a phase, audit for logic that lives only in route handlers /
+  server components / client code and move anything security- or
+  integrity-related into RLS or Postgres functions.
