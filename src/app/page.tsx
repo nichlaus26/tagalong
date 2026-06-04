@@ -6,6 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 import NotificationBell from "@/components/NotificationBell";
 import { supabase } from "@/lib/supabase";
 import { FEED_ACTIVITY_TYPES } from "@/lib/activityTypes";
+import { useDiscoverActivities } from "@/lib/useDiscoverActivities";
 
 type Activity = {
   id: string;
@@ -24,6 +25,14 @@ export default function Home() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [typeFilter, setTypeFilter] = useState("");
   const [loaded, setLoaded] = useState(false);
+
+  // TODO: remove after verifying discover_activities works
+  const discovery = useDiscoverActivities();
+  useEffect(() => {
+    if (!discovery.loading) {
+      console.log("[discover_activities]", discovery.activities, discovery.filters);
+    }
+  }, [discovery.loading, discovery.activities, discovery.filters]);
 
   useEffect(() => {
     async function load() {
