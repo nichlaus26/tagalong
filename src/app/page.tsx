@@ -3,8 +3,12 @@
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import NotificationBell from "@/components/NotificationBell";
+import dynamic from "next/dynamic";
 import Spinner from "@/components/Spinner";
 import { useDiscoverActivities } from "@/lib/useDiscoverActivities";
+
+// Dynamic import — MapLibre GL requires browser APIs (no SSR)
+const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
 const RUN_SUBTYPES = [
   { value: "long_run", label: "Long Run" },
@@ -229,6 +233,16 @@ function DiscoveryFeed() {
           />
           Hide full activities
         </label>
+      </div>
+
+      {/* Map */}
+      <div className="mb-6">
+        <MapView
+          activities={activities}
+          centerLat={filters.centerLat}
+          centerLng={filters.centerLng}
+          radiusKm={filters.radiusKm}
+        />
       </div>
 
       {/* Activity list */}

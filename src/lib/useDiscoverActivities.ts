@@ -54,18 +54,15 @@ export function useDiscoverActivities() {
   const [locationResolved, setLocationResolved] = useState(false);
   const locationCached = useRef(false);
 
-  // Resolve user location once — ask browser, fall back to Brussels
+  // Resolve user location — always try geolocation, use cache as initial value
   useEffect(() => {
     if (locationCached.current) return;
 
-    // Check sessionStorage for a cached location
+    // Use cached position as an immediate starting point (avoids blank map)
     const cached = sessionStorage.getItem("tagalong_center");
     if (cached) {
       const { lat, lng } = JSON.parse(cached);
       setFilters((f) => ({ ...f, centerLat: lat, centerLng: lng }));
-      setLocationResolved(true);
-      locationCached.current = true;
-      return;
     }
 
     if (!navigator.geolocation) {
@@ -75,7 +72,7 @@ export function useDiscoverActivities() {
     }
 
     const timeoutId = setTimeout(() => {
-      // Timeout — use Brussels fallback
+      // Timeout — keep whatever we have (cached or Brussels default)
       setLocationResolved(true);
       locationCached.current = true;
     }, GEOLOCATION_TIMEOUT);
@@ -91,7 +88,7 @@ export function useDiscoverActivities() {
         locationCached.current = true;
       },
       () => {
-        // Denied — use Brussels fallback
+        // Denied — keep whatever we have (cached or Brussels default)
         clearTimeout(timeoutId);
         setLocationResolved(true);
         locationCached.current = true;
