@@ -125,7 +125,7 @@ empty segments and dilutes the density that makes the thing work.
 - **Backend:** Supabase (Postgres + Auth + Storage)
 - **Auth method:** email + password
 - **Deployment:** Vercel (free tier), set up last
-- **Maps/geo:** none in v1, but store lat/lng so it's addable later
+- **Maps/geo:** PostGIS for radius queries; MapLibre GL for the map view (see §13)
 
 Keep dependencies minimal. No state-management library, no UI kit beyond Tailwind, no ORM (use the Supabase client directly).
 
@@ -148,7 +148,7 @@ Keep dependencies minimal. No state-management library, no UI kit beyond Tailwin
 - Activity photos
 - External notifications (email / SMS / push)
 - Real-time chat (upgrade from polling later)
-- Map / radius discovery (lat/lng stored now)
+- ~~Map / radius discovery~~ → now built in §13
 
 ---
 
@@ -478,3 +478,127 @@ invariants are the contract both clients share.
 - Before merging a phase, audit for logic that lives only in route handlers /
   server components / client code and move anything security- or
   integrity-related into RLS or Postgres functions.
+
+---
+
+## §13 — Discovery & Map UX
+
+This section specifies the first-login experience: a branded splash screen, a map of nearby upcoming runs, a map/list toggle, and filters. It pulls forward two previously deferred features — **geo/radius discovery (PostGIS)** and the **map view** — and introduces an `activity_type` seam so non-run activities slot in later without migration.
+
+**Guiding principle (unchanged):** All discovery logic, location filtering, and security live at the database level (a single Postgres function + RLS), never in client code. The Next.js web app and the future React Native app call the identical function.
+
+---
+
+### 13.1 — Schema additions (`activities` table)
+
+New columns only — `difficulty` (text, nullable), `latitude` (double precision, nullable), and `longitude` (double precision, nullable) already exist in the schema (§3). Do not re-add them.
+
+| Column | Type | Notes |
+|---|---|---|
+| `activity_type` | enum / FK to lookup | v1 is effectively always `'run'`. Model as enum or lookup table so `hike`, `climb`, `coffee`, etc. add later with no migration. **This is the seam.** |
+| `run_subtype` | text / enum, nullable | `long_run`, `sprint_workout`, `hill_workout`, etc. Only meaningful when `activity_type = 'run'`. Nullable. |
+| `geog` | `geography(Point, 4326)` | PostGIS point used for the radius query. Index with GiST. Populate from existing `latitude`/`longitude` via trigger or on insert so it never drifts. |
+
+No new columns needed for **date/time** (use existing activity start time) or **spots available** (capacity minus approved-RSVP count).
+
+**Index:** `CREATE INDEX activities_geog_idx ON activities USING GIST (geog);`
+
+---
+
+### 13.2 — The discovery function (single source of truth)
+
+One Postgres function backs **both** map and list views. Both pass the same params; map reads coordinates for pins, list reads full card data — returned together in one call.
+
+```
+discover_activities(
+  p_lat            double precision,   -- center (user location or city fallback)
+  p_lng            double precision,
+  p_radius_km      double precision,   -- default 10
+  p_activity_type  text default 'run',
+  p_run_subtype    text[] default null,-- null = any
+  p_difficulty     text[] default null,-- null = any
+  p_date_from      timestamptz default now(),
+  p_date_to        timestamptz default null,
+  p_only_open      boolean default false -- true = exclude full activities
+) returns table (
+  id uuid, title text, start_time timestamptz,
+  lat double precision, lng double precision,
+  difficulty text, run_subtype text,
+  capacity int, approved_count int, spots_left int,
+  distance_km double precision,
+  host_id uuid
+)
+```
+
+Inside the function:
+- Filter to upcoming activities (`start_time >= p_date_from`, and `<= p_date_to` when provided).
+- Radius: `ST_DWithin(geog, ST_MakePoint(p_lng, p_lat)::geography, p_radius_km * 1000)`.
+- `distance_km`: `ST_Distance(...) / 1000`, returned for sorting and list display. Order by distance ascending by default.
+- Apply existing **RLS and blocking ripples** — blocked-user filtering happens here, consistent with §12 invariants. Discovery must never surface an activity the viewer shouldn't see.
+- `spots_left` and `p_only_open` derive from capacity vs. approved RSVP count (§ existing RSVP model).
+
+Mark `SECURITY INVOKER` so the caller's RLS applies, or `SECURITY DEFINER` with explicit re-checks if you need it to bypass row visibility for the distance math — **prefer INVOKER** to keep the blocking ripples honest.
+
+---
+
+### 13.3 — Location flow ("ask, fall back to city")
+
+On first authenticated load:
+1. Request browser geolocation with a **~5s timeout** (so the splash never hangs).
+2. **Granted** → center map on the user's coordinates.
+3. **Denied / timeout / unavailable** → center on the **launch city's** fixed center coordinates.
+4. **Cache the resolved center** (in-memory + persisted per session) so the app doesn't re-prompt on every load.
+5. Default `p_radius_km = 10` for a single-city launch; expose radius as a user-adjustable filter so they can widen it.
+
+Native note: the React Native app swaps the browser geolocation call for the Expo Location API — the fallback logic and the `discover_activities` call are identical.
+
+---
+
+### 13.4 — Filters (v1)
+
+All filters map directly to `discover_activities` params. UI is shared between map and list; changing a filter re-runs the one query and both views update.
+
+| Filter | Param | UI |
+|---|---|---|
+| Date/time | `p_date_from` / `p_date_to` | Quick chips: Today, This week, plus a custom range. |
+| Distance / radius | `p_radius_km` | Slider or stepped options (5 / 10 / 25 km). |
+| Difficulty | `p_difficulty` | Multi-select: easy / moderate / hard. |
+| Type of run | `p_run_subtype` | Multi-select: long run, sprint workout, hill workout, etc. |
+| Spots available | `p_only_open` | Toggle: hide full activities. |
+
+(`activity_type` is fixed to `'run'` in the UI for v1; it's a param so the filter bar can expose activity types once you broaden beyond runs.)
+
+---
+
+### 13.5 — Screens & components
+
+- **Splash screen** — Branded loading screen on initial authenticated mount. Not a route; a transition. Shown while the first `discover_activities` call resolves (and while geolocation is being requested). Fades to the map on first data resolve.
+- **Discovery screen** — Hosts the filter bar + a map/list toggle. Default view: map.
+  - **Map view** — Map library renders one pin per returned activity. Tapping a pin opens an activity preview → activity detail.
+  - **List view** — Same query results as cards, sorted by distance (then start time). Each card shows title, start time, difficulty, subtype, distance, spots left.
+  - **Toggle** — Pure client state. Both views read the same fetched result set; no refetch on toggle.
+
+**Map library:** MapLibre GL (free vector tiles, no key) is the low-friction default and keeps cost at zero for the MVP. Mapbox or Google give richer styling but add API keys and per-load cost — defer unless you specifically want their look. Whichever you pick, isolate it behind a thin component so the native app can substitute its own map (e.g. `react-native-maps` / Expo) without touching the data layer.
+
+---
+
+### 13.6 — Build order
+
+1. **Schema migration** — add `activity_type`, `run_subtype`, `geog` columns; backfill `geog` from existing `latitude`/`longitude`; add the GiST index; seed `activity_type='run'` on existing rows.
+2. **`discover_activities` function** — with all filters, distance, RLS/blocking applied. Test directly in SQL before any UI.
+3. **Shared query/data layer** in Next.js — one hook/fetcher that calls the function and holds filter state.
+4. **List view** — build first; simpler, and it validates the data layer end-to-end.
+5. **Map view** — add on top of the working query, behind the isolated map component.
+6. **Toggle + splash** — last, as polish.
+
+Building list before map means the query is proven before map-library complexity enters the picture.
+
+---
+
+### 13.7 — Claude Code guardrails
+
+- Do **not** put any filtering, distance, or blocking logic in frontend/React code — it belongs in `discover_activities`. The frontend only passes params and renders results.
+- Do **not** add `run_subtype` or `difficulty` checks as ad-hoc client conditionals; they are function params.
+- Keep the map library behind a single wrapper component; no map-vendor imports scattered through the app.
+- `geog` must stay in sync with `latitude`/`longitude` — enforce via trigger or set both on write, never let a client write one without the other.
+- Respect existing §12 security invariants: discovery is a read path that must honor RLS and blocking ripples exactly as the rest of the app does.
